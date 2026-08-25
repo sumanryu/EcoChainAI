@@ -1,0 +1,38 @@
+# --- Secrets — NEVER commit these ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+aws-credentials*
+
+# --- Data (large, regenerable, not portfolio content) ---
+data/raw/
+data/*.parquet
+data/*.duckdb
+data/*.json
+data/agent_queue.db
+qdrant_storage/
+
+# --- ML artifacts ---
+mlruns.db
+mlruns/
+
+# --- Python ---
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# --- OS / editor ---
+.DS_Store
+.vscode/
+.idea/
+
+# --- Terraform (added in later v2 phases) ---
+*.tfstate
+*.tfstate.*
+.terraform/
