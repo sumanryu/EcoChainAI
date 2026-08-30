@@ -1,0 +1,120 @@
+# ==============================================================================
+# docker-compose.yml — defines and connects MULTIPLE containers as one app.
+#
+# Without compose, you'd need several long `docker run` commands, and you'd
+# have to manually set up networking so they can reach each other. Compose
+# does both in one file: `docker compose up` starts everything, wired
+# together, in the right order.
+# ==============================================================================
+
+version: "3.9"
+
+services:
+  # ---------------------------------------------------------------------
+  # Qdrant — the vector database. Using the OFFICIAL pre-built image
+  # (not something we build ourselves) since we're not customizing it.
+  # ---------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"     # host:container — lets you open localhost:6333/dashboard from outside Docker too
+    volumes:
+      - qdrant_data:/qdrant/storage
+      # ^ named volume (defined at the bottom). Without this, Qdrant's data
+      # would live INSIDE the container's writable layer and disappear the
+      # moment the container is removed (`docker compose down`). The named
+      # volume persists independently of the container's lifecycle.
+    restart: unless-stopped
+    # restart policy: if the container crashes, Docker restarts it
+    # automatically. "unless-stopped" means it won't restart if YOU
+    # deliberately stopped it.
+
+  # ---------------------------------------------------------------------
+  # Dashboard — the Streamlit app. Built from OUR Dockerfile (not a
+  # public image), since this is our own code.
+  # ---------------------------------------------------------------------
+  dashboard:
+    build: .
+    # "build: ." tells compose "build an image from the Dockerfile in this
+    # folder" rather than pulling a pre-made one — this is what makes it
+    # OUR image, not a generic Python image.
+    ports:
+      - "8501:8501"
+    environment:
+      - S3_BUCKET=${S3_BUCKET}
+      - AWS_REGION=${AWS_REGION:-ap-south-2}
+      - QDRANT_HOST=qdrant
+      # ^ THIS is the container-networking concept from the explanation
+      # above. "qdrant" here isn't a real hostname anywhere on the
+      # internet — it's the SERVICE NAME defined above, and Docker's
+      # internal DNS resolves it to that container's IP automatically.
+      # Compare this to your local run where QDRANT_HOST was "localhost".
+    depends_on:
+      - qdrant
+      # ^ tells Docker "start qdrant before dashboard." NOTE: this only
+      # controls START ORDER, not "wait until qdrant is actually ready to
+      # accept connections" — that's a subtlety worth knowing; for a more
+      # bulletproof setup you'd add a healthcheck, which we can add later
+      # if startup races become a problem in practice.
+    env_file:
+      - .env
+      # loads AWS credentials / other secrets from your LOCAL .env file
+      # (gitignored, never baked into the image) — see .env.example
+    volumes:
+      - ~/.aws:/root/.aws:ro
+      # ^ THE FIX for ProfileNotFound. .env sets AWS_PROFILE=ecochainai,
+      # but that's just a NAME — boto3 (inside the container) still needs
+      # to read ~/.aws/credentials to find what that profile's actual
+      # keys are. Your laptop's ~/.aws folder is NOT automatically visible
+      # inside a container (containers are isolated filesystems) — this
+      # volume mount is what shares it in, read-only (:ro) so the
+      # container can never modify your real credentials file.
+      # NOTE: this local mount goes away in Phase 6 (EC2) — there we use
+      # an IAM ROLE attached to the instance instead, which is the more
+      # production-correct pattern (no credential files at all, cloud-native).
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------
+  # Agents — SAME image as dashboard (see Dockerfile comments), but with
+  # a DIFFERENT command, and NOT started by default.
+  # ---------------------------------------------------------------------
+  agents:
+    build: .
+    environment:
+      - S3_BUCKET=${S3_BUCKET}
+      - AWS_REGION=${AWS_REGION:-ap-south-2}
+      - QDRANT_HOST=qdrant
+    depends_on:
+      - qdrant
+    env_file:
+      - .env
+    volumes:
+      - ~/.aws:/root/.aws:ro
+    command: ["python", "-m", "src.agents.run_day3"]
+    # ^ this OVERRIDES the Dockerfile's CMD. Same image, different job —
+    # this is the "one image, two purposes" idea from the Dockerfile
+    # comments made concrete.
+    profiles: ["batch"]
+    # ^ IMPORTANT: services with a "profile" do NOT start with a plain
+    # `docker compose up`. This service only runs when explicitly
+    # requested (`docker compose --profile batch up agents`) or triggered
+    # by the scheduled GitHub Actions workflow in a later phase. This is
+    # intentional — agents should run periodically, not sit running 24/7
+    # doing nothing between batches.
+
+volumes:
+  qdrant_data:
+
+  caddy_data:
+  caddy_config:
+
+# NOTE: the "dashboard" and "agents" services above still have the
+# ~/.aws:/root/.aws:ro mount from Phase 4 — that's fine for LOCAL runs.
+# On EC2, the IAM role attached at launch (infra/launch_ec2.sh) provides
+# credentials automatically, so boto3 finds them without any mount at all.
+# The mount is simply unused/harmless there (path won't exist -> Docker
+# skips it gracefully is NOT guaranteed on all versions, so on EC2 use
+# docker-compose.ec2.yml below instead, which omits it).
+    # declaring the named volume referenced above. Docker manages the
+    # actual storage location on the host; you don't need to think about
+    # where it physically lives.

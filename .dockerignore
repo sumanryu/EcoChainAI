@@ -1,0 +1,19 @@
+# Same spirit as .gitignore — these should never end up INSIDE the image.
+
+data/raw/
+data/*.duckdb
+data/*.parquet
+data/*.json
+data/agent_queue.db
+qdrant_storage/
+mlruns.db
+mlruns/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.git/
+.github/
+notebooks/
+.env
+*.pem

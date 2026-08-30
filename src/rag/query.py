@@ -2,13 +2,15 @@
 Day 2, Phase 4 — RAG query loop.
 
 embed question -> search Qdrant (top-k) -> stuff results as context -> ask
-Ollama (llama3) to answer grounded in that context.
+Amazon Bedrock to answer grounded in that context.
 
 Run interactively:
     python -m src.rag.query
 Or import `answer(question)` elsewhere (agents will do this in Day 3).
 """
-
+import json
+import os
+import boto3
 import ollama
 from qdrant_client import QdrantClient
 from sentence_transformers import SentenceTransformer
@@ -55,11 +57,16 @@ def answer(question: str, top_k: int = config.RAG_TOP_K) -> str:
     if not cards:
         return "No relevant insight cards found for this question."
     prompt = build_prompt(question, cards)
-    response = ollama.chat(
-        model=config.OLLAMA_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response["message"]["content"]
+ 
+    bedrock = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION", "ap-south-2"))
+    body = {
+        "inputText": prompt,
+        "textGenerationConfig": {"maxTokenCount": 512, "temperature": 0.3},
+    }
+    response = bedrock.invoke_model(modelId=config.BEDROCK_MODEL_ID, body=json.dumps(body))
+    result = json.loads(response["body"].read())
+    return result["results"][0]["outputText"]
+
 
 
 if __name__ == "__main__":

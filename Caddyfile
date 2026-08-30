@@ -1,0 +1,15 @@
+# Caddy automatically gets a free HTTPS certificate (via Let's Encrypt) for
+# whatever domain you put here — no manual cert setup needed.
+#
+# Replace YOURSUBDOMAIN with the one you register at duckdns.org (free).
+#
+# basicauth gates the whole dashboard behind a username/password — since
+# this is meant for interviewers to try, not a public product.
+# Generate the hashed password with: caddy hash-password
+
+ecochainai.duckdns.org {
+    basicauth {
+        $2a$14$sX.AVYkKjMFNW268ZgR3.umncSi9q9OTho/UykPu5DXVduEYLfVLK
+    }
+    reverse_proxy dashboard:8501
+}

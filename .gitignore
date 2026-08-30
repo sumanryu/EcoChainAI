@@ -36,3 +36,7 @@ __pycache__/
 *.tfstate
 *.tfstate.*
 .terraform/
+
+# --- Account-specific infra artifacts ---
+infra/.bucket_name
+convop/

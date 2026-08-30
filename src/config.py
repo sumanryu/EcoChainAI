@@ -1,5 +1,6 @@
 """Central config. Adjust RAW_DATA_DIR to wherever you extracted the M5 csvs."""
 
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,14 +15,20 @@ MLFLOW_TRACKING_URI = f"sqlite:///{ROOT / 'mlruns.db'}"
 MLFLOW_EXPERIMENT = "demand-intel-mesh"
 
 # Day 2: RAG
-QDRANT_HOST = "localhost"
+QDRANT_HOST = os.environ.get("QDRANT_HOST", "localhost")
 QDRANT_PORT = 6333
 QDRANT_COLLECTION = "insight_cards"
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"  # sentence-transformers, 384-dim
 EMBEDDING_DIM = 384
 OLLAMA_MODEL = "llama3"
 OLLAMA_HOST = "http://localhost:11434"
+BEDROCK_MODEL_ID = "amazon.titan-text-express-v1"  # live deployment (Phase 5+)
 RAG_TOP_K = 5
+
+# v2: S3 data lake (populated by infra/setup_s3.sh, consumed at EC2 deploy time)
+S3_BUCKET_NAME_FILE = ROOT / "infra" / ".bucket_name"  # written by setup_s3.sh, gitignored
+S3_RAW_PREFIX = "raw/"
+S3_PROCESSED_PREFIX = "processed/"
 
 # Day 3: agents
 AGENT_QUEUE_DB = ROOT / "data" / "agent_queue.db"
