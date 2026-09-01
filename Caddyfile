@@ -9,7 +9,7 @@
 
 ecochainai.duckdns.org {
     basicauth {
-        $2a$14$sX.AVYkKjMFNW268ZgR3.umncSi9q9OTho/UykPu5DXVduEYLfVLK
+       interviewers $2a$14$sX.AVYkKjMFNW268ZgR3.umncSi9q9OTho/UykPu5DXVduEYLfVLK
     }
     reverse_proxy dashboard:8501
 }

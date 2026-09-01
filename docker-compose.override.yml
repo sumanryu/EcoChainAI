@@ -1,0 +1,15 @@
+# Auto-loaded by plain `docker compose up` (no -f flags needed) — this is a
+# Compose-recognized special filename. LOCAL DEV ONLY — do not deploy this
+# file's contents to EC2; it exposes the port directly and mounts your
+# laptop's AWS credentials, neither of which apply on the server.
+
+services:
+  dashboard:
+    ports:
+      - "8501:8501"
+    volumes:
+      - ~/.aws:/root/.aws:ro
+
+  agents:
+    volumes:
+      - ~/.aws:/root/.aws:ro

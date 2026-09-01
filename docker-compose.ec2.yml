@@ -1,0 +1,26 @@
+# EC2 only. Run explicitly with:
+#   docker compose -f docker-compose.yml -f docker-compose.ec2.yml up -d
+#
+# Adds Caddy (HTTPS + basic auth, publicly exposed on 80/443) as the ONLY
+# public entry point. dashboard/agents get no ports or AWS-credential mount
+# here — the base file already omits those, and on EC2 credentials come
+# from the instance's IAM role instead (see infra/launch_ec2.sh), so there
+# is nothing to add for them at all.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - dashboard
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
