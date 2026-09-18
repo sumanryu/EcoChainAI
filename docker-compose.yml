@@ -17,10 +17,18 @@ services:
       - qdrant
     env_file:
       - .env
+    volumes:
+      - agent_queue_data:/app/data
+      # ^ FIX (v1.1): agent_queue.db previously lived inside the container's
+      # writable layer, which is wiped on every rebuild/recreate — the
+      # Agent Action Log tab would silently reset to empty. Named volume
+      # persists it across restarts, same pattern as qdrant_data above.
+      # NOTE: forecasts.parquet/insight_cards.json still get freshly
+      # re-downloaded from S3 into this same folder on every container
+      # start (via entrypoint.sh) — only agent_queue.db needs persistence.
+      # "ports" still deliberately absent here — that differs between
+      # local dev and EC2, added by docker-compose.override.yml / .ec2.yml.
     restart: unless-stopped
-    # NOTE: no "ports" or "volumes" here on purpose — those differ between
-    # local dev and EC2, and get added by docker-compose.override.yml
-    # (local) or docker-compose.ec2.yml (EC2). See those files for why.
 
   agents:
     build: .
@@ -32,8 +40,14 @@ services:
       - qdrant
     env_file:
       - .env
+    volumes:
+      - agent_queue_data:/app/data
+      # ^ SAME volume as dashboard — both need to read/write the same
+      # agent_queue.db, so they share this volume rather than each having
+      # their own separate copy.
     command: ["python", "-m", "src.agents.run_day3"]
     profiles: ["batch"]
 
 volumes:
   qdrant_data:
+  agent_queue_data:
