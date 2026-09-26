@@ -17,6 +17,7 @@ import streamlit as st
 
 from src import config
 from src.agents import queue
+from src.rag import rate_limit
 from src.rag.query import answer as rag_answer
 
 st.set_page_config(page_title="Demand Intelligence Mesh", layout="wide")
@@ -123,8 +124,20 @@ with tab_agents:
 
 with tab_chat:
     st.subheader("Ask a question grounded in the insight store")
+
+    usage = rate_limit.usage_snapshot()
+    st.caption(
+        f"Usage: {usage['burst_used']}/{usage['burst_max']} this minute, "
+        f"{usage['daily_used']}/{usage['daily_max']} today "
+        f"(rate-limited to protect the demo's cloud budget)"
+    )
+
     question = st.text_input("Question", placeholder="Which items are at risk of stockout?")
     if st.button("Ask") and question:
-        with st.spinner("Retrieving context and generating answer..."):
-            response = rag_answer(question)
-        st.write(response)
+        allowed, message = rate_limit.check_and_record()
+        if not allowed:
+            st.warning(message)
+        else:
+            with st.spinner("Retrieving context and generating answer..."):
+                response = rag_answer(question)
+            st.write(response)
