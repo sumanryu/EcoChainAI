@@ -1,0 +1,30 @@
+name: Scheduled Agent Batch
+
+# Runs the Demand Planning -> Inventory agent handoff periodically, without
+# you manually SSHing in. This IS the "24/7 system" story for the resume —
+# GitHub's scheduler wakes up, connects to EC2, and triggers a real batch
+# run on a cadence, fully hands-off.
+
+on:
+  schedule:
+    # every 6 hours. Cron syntax: minute hour day month weekday.
+    # Cheap to run since it's just an SSH command, not compute on GitHub's side.
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    # lets you trigger it manually from the GitHub Actions tab too, for
+    # demos or testing without waiting for the schedule.
+
+jobs:
+  run-agent-batch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH into EC2 and run the agent batch
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/EcoChainAI
+            docker compose -f docker-compose.yml -f docker-compose.ec2.yml --profile batch up agents
+            echo "Agent batch run complete at $(date)"
