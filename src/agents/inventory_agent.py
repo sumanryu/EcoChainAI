@@ -1,17 +1,10 @@
 """
-Day 3 — Inventory Agent.
+Day 3 — Inventory Agent (Phase 9: now pushes FORWARD to Procurement).
 
-Consumes pending insights from the shared queue (written by the Demand
-Planning Agent), grounds its reasoning with a RAG query against the same
-Qdrant store, computes a reorder quantity, and writes the decision to
-actions_log. This is the "agent takes an action based on another agent's
-output" handoff the whole project is built to demonstrate.
-
-Reorder quantity logic (v1, simple and stated explicitly):
-    reorder_qty = max(0, (p90_forecast * lead_time_days * safety_factor) - on_hand_inventory)
-This is a standard safety-stock-style heuristic, not a full inventory
-optimization model — good enough to prove the pattern, and callable out as
-a place to plug in a smarter policy later.
+Reads from topic "stockout_risk" (Demand Planning's output), computes a
+reorder quantity, and — NEW in Phase 9 — pushes the reorder request onward
+to topic "reorder_request" for the Procurement Agent to check against
+supplier capacity, instead of the chain stopping here.
 
 Run:
     python -m src.agents.inventory_agent
@@ -25,13 +18,16 @@ from src import config
 from src.agents import queue
 from src.rag.query import answer as rag_answer
 
+
 class InventoryState(TypedDict):
     pending_cards: list[dict]
     decisions: list[dict]
 
+
 def fetch_pending(state: InventoryState) -> InventoryState:
-    state["pending_cards"] = queue.pop_pending_insights()
+    state["pending_cards"] = queue.pop_pending("stockout_risk")
     return state
+
 
 def decide_reorders(state: InventoryState) -> InventoryState:
     decisions = []
@@ -53,13 +49,12 @@ def decide_reorders(state: InventoryState) -> InventoryState:
     state["decisions"] = decisions
     return state
 
-def explain_and_log(state: InventoryState) -> InventoryState:
+
+def explain_log_and_forward(state: InventoryState) -> InventoryState:
     for decision in state["decisions"]:
         if decision["reorder_qty"] <= 0:
-            continue  # nothing to reorder, skip logging noise
+            continue
 
-        # ground the explanation in the RAG store — proves the agent is
-        # reasoning over the shared knowledge base, not just doing arithmetic
         question = (
             f"Why is item {decision['item_id']} at store {decision['store_id']} "
             f"at stockout risk?"
@@ -80,18 +75,23 @@ def explain_and_log(state: InventoryState) -> InventoryState:
                 "rationale": rationale,
             },
         )
+
+        # NEW: forward to Procurement instead of stopping here
+        queue.push_to_topic("reorder_request", decision["card_id"], decision)
     return state
+
 
 def build_graph():
     graph = StateGraph(InventoryState)
     graph.add_node("fetch_pending", fetch_pending)
     graph.add_node("decide_reorders", decide_reorders)
-    graph.add_node("explain_and_log", explain_and_log)
+    graph.add_node("explain_log_and_forward", explain_log_and_forward)
     graph.set_entry_point("fetch_pending")
     graph.add_edge("fetch_pending", "decide_reorders")
-    graph.add_edge("decide_reorders", "explain_and_log")
-    graph.add_edge("explain_and_log", END)
+    graph.add_edge("decide_reorders", "explain_log_and_forward")
+    graph.add_edge("explain_log_and_forward", END)
     return graph.compile()
+
 
 def run() -> list[dict]:
     queue.init_db()
@@ -99,7 +99,7 @@ def run() -> list[dict]:
     result = app.invoke({"pending_cards": [], "decisions": []})
     n_reorders = sum(1 for d in result["decisions"] if d["reorder_qty"] > 0)
     print(f"Inventory Agent: processed {len(result['pending_cards'])} insights, "
-          f"recommended {n_reorders} reorders")
+          f"forwarded {n_reorders} reorder requests to Procurement")
     return result["decisions"]
 
 
