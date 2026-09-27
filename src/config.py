@@ -1,5 +1,8 @@
 """Central config. Adjust RAW_DATA_DIR to wherever you extracted the M5 csvs."""
 
+
+from dotenv import load_dotenv
+load_dotenv()
 import os
 from pathlib import Path
 
